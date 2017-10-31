@@ -1,7 +1,10 @@
 package uid_test
 
-import "testing"
-import "github.com/billglover/uid"
+import (
+	"testing"
+
+	"github.com/billglover/uid"
+)
 
 func TestUID(t *testing.T) {
 	id, err := uid.NextID()

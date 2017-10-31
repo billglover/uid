@@ -9,6 +9,7 @@ package uid
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -28,9 +29,6 @@ var (
 // a valid uid could not be generated.
 func NextID() (uint64, error) {
 
-	mu.Lock()
-	defer mu.Unlock()
-
 	// get the current time in milliseconds
 	now := time.Now().UnixNano() / 1e6
 
@@ -42,7 +40,7 @@ func NextID() (uint64, error) {
 	// increment the sequence number if the timestamp
 	// hasn't changed since the last ID was generated
 	if now == prev {
-		seq++
+		atomic.AddUint64(&seq, 1)
 	} else {
 		seq = 0
 	}
