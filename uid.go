@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,7 +28,7 @@ var (
 
 // NextID returns the next uid in the sequence or an error if
 // a valid uid could not be generated.
-func NextID() ([]byte, error) {
+func NextID(hostname string, pid int) ([]byte, error) {
 
 	// 12-byte IDs
 	uid := make([]byte, 12)
@@ -40,10 +39,6 @@ func NextID() ([]byte, error) {
 
 	// 3-byte machine identifiers
 	hid := make([]byte, 3)
-	hostname, err := os.Hostname()
-	if err != nil {
-		return uid, err
-	}
 
 	hw := md5.New()
 	hw.Write([]byte(hostname))
@@ -54,7 +49,6 @@ func NextID() ([]byte, error) {
 	uid[6] = hid[2]
 
 	// 2-byte process identifier
-	pid := os.Getpid()
 	binary.BigEndian.PutUint16(uid[7:9], uint16(pid))
 
 	// 3-byte counter starting at a random number
@@ -73,8 +67,8 @@ func NextID() ([]byte, error) {
 
 // NextStringID returns the next uid in the sequence as a hexadecimal
 // string or an error if a valid uid could not be generated.
-func NextStringID() (string, error) {
-	id, err := NextID()
+func NextStringID(hostname string, pid int) (string, error) {
+	id, err := NextID(hostname, pid)
 	if err != nil {
 		return "", err
 	}

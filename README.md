@@ -19,6 +19,6 @@ Package documentation available on GoDoc: uid: [github.com/billglover/uid](https
 goos: darwin
 goarch: amd64
 pkg: github.com/billglover/uid
-BenchmarkUID-4            500000              2313 ns/op
-BenchmarkUIDString-4      500000              2307 ns/op
+BenchmarkUID-4           5000000               375 ns/op
+BenchmarkUIDString-4     3000000               431 ns/op
 ```
