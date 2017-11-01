@@ -9,6 +9,8 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/rand"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -19,6 +21,11 @@ const (
 	instBits uint64 = 10
 )
 
+type UID struct {
+	hid []byte
+	pid uint16
+}
+
 var (
 	mu   sync.Mutex // we need a lock to ensure concurrency safe
 	inst uint64     // an instance identifier, 10-bit precision
@@ -26,49 +33,73 @@ var (
 	prev int64      // previous timestamp
 )
 
+// NewGenerator returns an instance of a UID generator. During
+// initialisation it generates the machine and process identifiers.
+func NewGenerator() *UID {
+
+	// generate a 3-byte machine identifier from the hostname
+	// or random bytes
+	hid := make([]byte, 3)
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		rand.Read(hid)
+	} else {
+		hw := md5.New()
+		hw.Write([]byte(hostname))
+		copy(hid, hw.Sum(nil))
+	}
+
+	// generate a process identifier
+	pid := os.Getpid()
+
+	// seed the sequence identifier
+	seq = uint64(rand.Int63())
+
+	uid := UID{
+		hid: hid,
+		pid: uint16(pid),
+	}
+	return &uid
+}
+
 // NextID returns the next uid in the sequence or an error if
 // a valid uid could not be generated.
-func NextID(hostname string, pid int) ([]byte, error) {
+func (uid *UID) NextID() ([]byte, error) {
 
 	// 12-byte IDs
-	uid := make([]byte, 12)
+	id := make([]byte, 12)
 
 	// 4-byte timestamps
 	now := time.Now().Unix()
-	binary.BigEndian.PutUint32(uid, uint32(now))
+	binary.BigEndian.PutUint32(id, uint32(now))
 
-	// 3-byte machine identifiers
-	hid := make([]byte, 3)
-
-	hw := md5.New()
-	hw.Write([]byte(hostname))
-	copy(hid, hw.Sum(nil))
-
-	uid[4] = hid[0]
-	uid[5] = hid[1]
-	uid[6] = hid[2]
-
-	// 2-byte process identifier
-	binary.BigEndian.PutUint16(uid[7:9], uint16(pid))
-
-	// 3-byte counter starting at a random number
-	atomic.AddUint64(&seq, 1)
-	uid[9] = byte(seq >> 16)
-	uid[10] = byte(seq >> 8)
-	uid[11] = byte(seq)
+	// 3-byte machine identifier
+	id[4] = uid.hid[0]
+	id[5] = uid.hid[1]
+	id[6] = uid.hid[2]
 
 	// time should never go backwards, for now
 	if now < prev {
-		return uid, fmt.Errorf("we went back in time, wait for %dms", prev-now)
+		return id, fmt.Errorf("stop the clock, we went back in time, wait for %dms", prev-now)
 	}
 
-	return uid, nil
+	// 2-byte process identifier
+	binary.BigEndian.PutUint16(id[7:9], uid.pid)
+
+	// 3-byte counter starting at a random number
+	atomic.AddUint64(&seq, 1)
+	id[9] = byte(seq >> 16)
+	id[10] = byte(seq >> 8)
+	id[11] = byte(seq)
+
+	return id, nil
 }
 
 // NextStringID returns the next uid in the sequence as a hexadecimal
 // string or an error if a valid uid could not be generated.
-func NextStringID(hostname string, pid int) (string, error) {
-	id, err := NextID(hostname, pid)
+func (uid *UID) NextStringID() (string, error) {
+	id, err := uid.NextID()
 	if err != nil {
 		return "", err
 	}
