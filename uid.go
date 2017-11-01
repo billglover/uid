@@ -1,13 +1,15 @@
 // Package uid provides functions to generate roughly time
 // ordered unique identifiers. The implementation is based
-// on Twitter's now abandoned Snowflake.
-// See https://github.com/twitter/snowflake/tree/b3f6a3c6ca8e1b6847baa6ff42bf72201e2c2231
-//
-// TODO: the instance identifier currently defaults to 0
+// on the MongoDB ObjectId specification.
+// See https://docs.mongodb.com/manual/reference/method/ObjectId/
 package uid
 
 import (
+	"crypto/md5"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -27,27 +29,45 @@ var (
 
 // NextID returns the next uid in the sequence or an error if
 // a valid uid could not be generated.
-func NextID() (uint64, error) {
+func NextID() ([]byte, error) {
 
-	// get the current time in milliseconds
-	now := time.Now().UnixNano() / 1e6
+	// 12-byte IDs
+	uid := make([]byte, 12)
+
+	// 4-byte timestamps
+	now := time.Now().Unix()
+	binary.BigEndian.PutUint32(uid, uint32(now))
+
+	// 3-byte machine identifiers
+	hid := make([]byte, 3)
+	hostname, err := os.Hostname()
+	if err != nil {
+		return uid, err
+	}
+
+	hw := md5.New()
+	hw.Write([]byte(hostname))
+	copy(hid, hw.Sum(nil))
+
+	uid[4] = hid[0]
+	uid[5] = hid[1]
+	uid[6] = hid[2]
+
+	// 2-byte process identifier
+	pid := os.Getpid()
+	binary.BigEndian.PutUint16(uid[7:9], uint16(pid))
+
+	// 3-byte counter starting at a random number
+	atomic.AddUint64(&seq, 1)
+	uid[9] = byte(seq >> 16)
+	uid[10] = byte(seq >> 8)
+	uid[11] = byte(seq)
 
 	// time should never go backwards, for now
 	if now < prev {
-		return 0, fmt.Errorf("we went back in time, wait for %dms", prev-now)
+		return uid, fmt.Errorf("we went back in time, wait for %dms", prev-now)
 	}
 
-	// increment the sequence number if the timestamp
-	// hasn't changed since the last ID was generated
-	if now == prev {
-		atomic.AddUint64(&seq, 1)
-	} else {
-		seq = 0
-	}
-	prev = now
-
-	// generate the uid
-	uid := uint64(now)<<(seqBits+instBits) | inst<<seqBits | seq
 	return uid, nil
 }
 
@@ -59,5 +79,5 @@ func NextStringID() (string, error) {
 		return "", err
 	}
 
-	return fmt.Sprintf("%#x", id), err
+	return hex.EncodeToString(id), err
 }

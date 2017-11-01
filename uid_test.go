@@ -13,8 +13,8 @@ func TestUID(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if id <= 0 {
-		t.Fatalf("uid should be a positive number, got %d", id)
+	if len(id) != 12 {
+		t.Fatalf("uid should be 12 bytes, got %d", len(id))
 	}
 }
 
@@ -31,16 +31,16 @@ func TestUIDString(t *testing.T) {
 }
 
 func TestUnique(t *testing.T) {
-	m := make(map[uint64]bool, 100000)
+	m := make(map[string]bool, 100000)
 
 	for i := 0; i < 100000; i++ {
-		id, err := uid.NextID()
+		id, err := uid.NextStringID()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
 		if m[id] {
-			t.Fatalf("uid %d reissued after %d robots.", id, i)
+			t.Fatalf("uid %s reissued after %d robots.", id, i)
 		}
 		m[id] = true
 	}
